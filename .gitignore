@@ -1,0 +1,17 @@
+# NetBeans
+/nbproject/private/
+/build/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+
+# Maven / Compilados
+/target/
+*.class
+
+# IDEs generales
+.idea/
+*.iml
+.vscode/
+.DS_Store
