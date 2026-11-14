@@ -16,13 +16,13 @@ public class UsuarioDAOArrayImpl implements UsuarioDAO {
     }
 
     @Override
-    public Usuario buscarPorId(int id) {
+    public Usuario buscarPorId(Integer id) {
         for (Usuario u : baseDeDatosMemoria) {
             if (u.getId() == id) {
                 return u;
             }
         }
-        return null; // Retorna null si no lo encuentra
+        return null;
     }
 
     @Override
