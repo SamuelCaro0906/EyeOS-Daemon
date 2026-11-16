@@ -280,6 +280,10 @@ public class AgentApp extends Application {
     }
 
     private String comandoAutostart() {
+        String appPath = System.getProperty("jpackage.app-path");
+        if (appPath != null && !appPath.isBlank()) {
+            return "\"" + appPath + "\"";
+        }
         Path javaw = Path.of(System.getProperty("java.home"), "bin", "javaw.exe");
         String cp = System.getProperty("java.class.path");
         return "\"" + javaw + "\" --enable-native-access=ALL-UNNAMED -cp \"" + cp
