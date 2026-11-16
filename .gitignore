@@ -9,6 +9,10 @@
 # Maven / Compilados
 /target/
 *.class
+/src/main/resources/db.properties
+
+# Registros locales
+*.log
 
 # IDEs generales
 .idea/
