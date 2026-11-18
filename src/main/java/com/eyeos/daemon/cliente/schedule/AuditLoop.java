@@ -3,14 +3,18 @@ package com.eyeos.daemon.cliente.schedule;
 import com.eyeos.daemon.cliente.collect.FileCollector;
 import com.eyeos.daemon.cliente.collect.ReportAssembler;
 import com.eyeos.daemon.cliente.config.AgentConfig;
+import com.eyeos.daemon.cliente.config.ConfigStore;
 import com.eyeos.daemon.cliente.config.ConsentStore;
 import com.eyeos.daemon.cliente.ftp.FtpUploader;
 import com.eyeos.daemon.cliente.guard.ProcessGuard;
 import com.eyeos.daemon.common.model.EquipoReportado;
+import com.eyeos.daemon.common.report.ReporteParser;
 import com.eyeos.daemon.common.report.ReportOptions;
 import com.eyeos.daemon.common.report.ReportWriter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -34,6 +38,7 @@ public class AuditLoop {
     private final List<Consumer<String>> listeners = new CopyOnWriteArrayList<>();
 
     private ScheduledExecutorService executor;
+    private Path scriptBat;
 
     public AuditLoop(AgentConfig config, ConsentStore consentStore) {
         this.config = config;
@@ -42,6 +47,10 @@ public class AuditLoop {
 
     public void agregarListener(Consumer<String> listener) {
         listeners.add(listener);
+    }
+
+    public void usarScript(Path scriptBat) {
+        this.scriptBat = scriptBat;
     }
 
     public synchronized void iniciar() {
@@ -87,14 +96,23 @@ public class AuditLoop {
         }
 
         ReportOptions options = config.getReportOptions();
-        EquipoReportado reporte = assembler.ensamblar(options, consentStore.tokenActual());
+        EquipoReportado reporte;
+        String contenido;
+        if (scriptBat != null && Files.exists(scriptBat)) {
+            Path salida = rutaSalida();
+            ejecutarScript(salida);
+            contenido = Files.readString(salida, StandardCharsets.UTF_8);
+            reporte = new ReporteParser().parsear(contenido);
+        } else {
+            reporte = assembler.ensamblar(options, consentStore.tokenActual());
+            contenido = writer.escribir(reporte, options.getSecciones());
+        }
 
         ProcessGuard guard = new ProcessGuard(options.getUmbralProcesoMb(), config.isTerminarProcesos());
         for (String accion : guard.evaluar(reporte.getProcesos())) {
             notificar(accion);
         }
 
-        String contenido = writer.escribir(reporte, options.getSecciones());
         String host = sane(reporte.getHostname());
         String nombre = "reporte_" + host + "_" + LocalDateTime.now().format(FMT) + ".txt";
         List<Path> archivos = fileCollector.recolectar(options.getCarpetas());
@@ -110,6 +128,35 @@ public class AuditLoop {
             notificar("Aviso: no se encontraron archivos en las carpetas configuradas.");
         }
         return mensaje;
+    }
+
+    private Path rutaSalida() throws IOException {
+        Path carpeta = ConfigStore.carpetaAplicacion().resolve("reportes");
+        Files.createDirectories(carpeta);
+        return carpeta.resolve("reporte_" + LocalDateTime.now().format(FMT) + ".txt");
+    }
+
+    private void ejecutarScript(Path salida) throws IOException {
+        ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/c",
+                scriptBat.toString(), salida.toString());
+        builder.redirectErrorStream(true);
+        Process proceso = builder.start();
+        boolean terminado;
+        try {
+            terminado = proceso.waitFor(60, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            proceso.destroyForcibly();
+            throw new IOException("El script .bat fue interrumpido.", e);
+        }
+        String consola = new String(proceso.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        if (!terminado) {
+            proceso.destroyForcibly();
+            throw new IOException("El script .bat tardo demasiado.");
+        }
+        if (proceso.exitValue() != 0) {
+            throw new IOException("El script .bat fallo: " + consola.trim());
+        }
     }
 
     private void notificar(String mensaje) {

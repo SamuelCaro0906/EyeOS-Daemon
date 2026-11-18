@@ -4,6 +4,7 @@ import com.eyeos.daemon.cliente.collect.FileCollector;
 import com.eyeos.daemon.cliente.config.AgentConfig;
 import com.eyeos.daemon.cliente.config.ConfigStore;
 import com.eyeos.daemon.cliente.config.ConsentStore;
+import com.eyeos.daemon.cliente.config.GeneradorBat;
 import com.eyeos.daemon.cliente.schedule.AuditLoop;
 import com.eyeos.daemon.cliente.startup.AutostartManager;
 import com.eyeos.daemon.cliente.ui.TrayManager;
@@ -81,6 +82,7 @@ public class AgentApp extends Application {
         cargarEnFormulario();
 
         if (config.configuracionCompleta() && consentStore.tieneConsentimiento(config)) {
+            prepararScript();
             loop.iniciar();
             log("Servicio iniciado. Intervalo: " + config.getIntervaloSegundos() + "s");
             ocultar();
@@ -238,6 +240,7 @@ public class AgentApp extends Application {
             } else {
                 consentStore.revocar();
             }
+            prepararScript();
             loop.iniciar();
             log("Configuracion guardada. Servicio activo cada " + config.getIntervaloSegundos() + "s.");
             if (config.isAutostart()) {
@@ -276,6 +279,16 @@ public class AgentApp extends Application {
         } else {
             loop.detener();
             log("Servicio pausado.");
+        }
+    }
+
+    private void prepararScript() {
+        try {
+            Path bat = GeneradorBat.generar(config, consentStore.tokenActual());
+            loop.usarScript(bat);
+            log("Script generado: " + bat);
+        } catch (Exception e) {
+            log("No se pudo generar el .bat: " + e.getMessage());
         }
     }
 
