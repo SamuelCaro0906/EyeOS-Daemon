@@ -63,8 +63,8 @@ public class PanelEstadisticas extends BorderPane {
     private boolean actualizando;
 
     public PanelEstadisticas() {
-        setPadding(new Insets(12));
-        setStyle("-fx-background-color: #f4f6f8;");
+        setPadding(new Insets(14, 22, 14, 22));
+        getStyleClass().add("panel-stats");
 
         CategoryAxis ramX = new CategoryAxis();
         ramX.setTickLabelRotation(-30);
@@ -108,18 +108,20 @@ public class PanelEstadisticas extends BorderPane {
         });
         soloWeb.setOnAction(e -> refrescarDominios());
         Button exportar = new Button("Exportar panel PNG");
+        exportar.getStyleClass().add("boton-primario");
         exportar.setOnAction(e -> exportar(contenido, "estadisticas"));
-        estado.setStyle("-fx-text-fill: #666;");
+        estado.getStyleClass().add("estado-panel");
         Region espaciador = new Region();
         HBox.setHgrow(espaciador, Priority.ALWAYS);
         HBox barra = new HBox(8, new Label("Equipo:"), equipos, soloWeb, espaciador, exportar, estado);
         barra.setAlignment(Pos.CENTER_LEFT);
 
         Label titulo = new Label("Estadisticas de uso");
-        titulo.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #222;");
+        titulo.getStyleClass().add("titulo-panel");
         Label subtitulo = new Label(
                 "Datos agregados de los reportes sincronizados. Actividad y arranque solo aparecen en reportes nuevos; los duplicados se descartan.");
-        subtitulo.setStyle("-fx-text-fill: #666;");
+        subtitulo.getStyleClass().add("subtitulo-panel");
+        subtitulo.setWrapText(true);
         VBox encabezado = new VBox(6, titulo, subtitulo, barra);
         encabezado.setPadding(new Insets(0, 0, 10, 0));
         setTop(encabezado);
@@ -134,7 +136,7 @@ public class PanelEstadisticas extends BorderPane {
 
         ScrollPane scroll = new ScrollPane(contenido);
         scroll.setFitToWidth(true);
-        scroll.setStyle("-fx-background-color: transparent;");
+        scroll.getStyleClass().add("stats-scroll");
         setCenter(scroll);
     }
 
@@ -147,19 +149,17 @@ public class PanelEstadisticas extends BorderPane {
 
     private VBox tarjeta(String titulo, Node grafico, Label kpi) {
         Label etiqueta = new Label(titulo);
-        etiqueta.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        etiqueta.getStyleClass().add("titulo-tarjeta");
         Button png = new Button("PNG");
         png.setOnAction(e -> exportar(grafico, titulo));
         Region espaciador = new Region();
         HBox.setHgrow(espaciador, Priority.ALWAYS);
         HBox cabecera = new HBox(8, etiqueta, espaciador, png);
         cabecera.setAlignment(Pos.CENTER_LEFT);
-        kpi.setStyle("-fx-text-fill: #555;");
+        kpi.getStyleClass().add("kpi-texto");
         kpi.setWrapText(true);
         VBox caja = new VBox(6, cabecera, kpi, grafico);
-        caja.setPadding(new Insets(12));
-        caja.setStyle("-fx-background-color: white; -fx-border-color: #e1e5ea; "
-                + "-fx-border-radius: 8; -fx-background-radius: 8;");
+        caja.getStyleClass().add("tarjeta");
         caja.setEffect(new DropShadow(8, 0, 2, Color.rgb(0, 0, 0, 0.10)));
         return caja;
     }
