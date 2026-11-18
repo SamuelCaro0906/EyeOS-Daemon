@@ -77,6 +77,11 @@
     -fx-font-size: 12px;
 }
 
+/* Resplandor discreto del logo de cabecera (color del tema) */
+.logo-cabecera {
+    -fx-effect: dropshadow(gaussian, rgba(59, 130, 246, 0.40), 18, 0.35, 0, 0);
+}
+
 /* ============================================================
    Tarjetas KPI
    ============================================================ */
@@ -373,12 +378,23 @@
     -fx-padding: 4 0 0 22;
 }
 
+/* Fondo del area de pestañas: transparente para eliminar la franja
+   azul que pinta modena.css (.tab-header-background deriva su color
+   de -fx-base, que es azul en ambos temas). */
+.tab-pane > .tab-header-area > .tab-header-background {
+    -fx-background-color: transparent;
+}
+
 .tab-pane > .tab-header-area > .headers-region > .tab {
     -fx-background-color: transparent;
     -fx-background-radius: 0;
     -fx-padding: 7 16 9 16;
     -fx-border-color: transparent;
     -fx-border-width: 0 0 3 0;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:not(:selected):hover {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
 }
 
 .tab-pane > .tab-header-area > .headers-region > .tab:selected {
@@ -390,6 +406,10 @@
     -fx-text-fill: #98a2b3;
     -fx-font-size: 13px;
     -fx-font-weight: bold;
+}
+
+.tab-pane > .tab-header-area > .headers-region > .tab:not(:selected):hover .tab-label {
+    -fx-text-fill: #e6e9ef;
 }
 
 .tab:selected .tab-label {

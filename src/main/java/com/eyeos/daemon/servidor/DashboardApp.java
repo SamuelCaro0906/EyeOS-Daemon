@@ -3,6 +3,7 @@ package com.eyeos.daemon.servidor;
 import com.eyeos.daemon.cliente.config.AgentConfig;
 import com.eyeos.daemon.cliente.config.ConfigStore;
 import com.eyeos.daemon.common.model.EquipoReportado;
+import com.eyeos.daemon.common.ui.Logo;
 import com.eyeos.daemon.common.ui.Tema;
 import com.eyeos.daemon.servidor.dao.ReporteDAO;
 import com.eyeos.daemon.servidor.dao.ReporteDAOArrayImpl;
@@ -24,6 +25,7 @@ import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.image.ImageView;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
@@ -110,6 +112,7 @@ public class DashboardApp extends Application {
         servicio = new ReporteServiceImpl(dao);
 
         stage.setTitle("EyeOS Daemon - Consola de Gestion");
+        stage.getIcons().setAll(Logo.paraVentana());
         cargarConfiguracionAgente();
 
         Scene escena = new Scene(construirVista(), 1180, 800);
@@ -195,6 +198,9 @@ public class DashboardApp extends Application {
     }
 
     private HBox construirCabecera() {
+        ImageView logo = Logo.crear(Logo.LG);
+        logo.getStyleClass().add("logo-cabecera");
+
         Label marca = new Label("EyeOS Daemon");
         marca.getStyleClass().add("marca");
         Label subtitulo = new Label("Consola de gestion de equipos");
@@ -213,7 +219,7 @@ public class DashboardApp extends Application {
         Region hueco = new Region();
         HBox.setHgrow(hueco, Priority.ALWAYS);
 
-        HBox barra = new HBox(14, titulos, hueco, pildoraEstado, contadorCabecera, botonTema);
+        HBox barra = new HBox(16, logo, titulos, hueco, pildoraEstado, contadorCabecera, botonTema);
         barra.setAlignment(Pos.CENTER_LEFT);
         barra.getStyleClass().add("cabecera");
         return barra;

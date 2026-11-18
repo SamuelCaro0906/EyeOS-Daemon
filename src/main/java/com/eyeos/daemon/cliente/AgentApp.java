@@ -9,6 +9,7 @@ import com.eyeos.daemon.cliente.schedule.AuditLoop;
 import com.eyeos.daemon.cliente.startup.AutostartManager;
 import com.eyeos.daemon.cliente.ui.TrayManager;
 import com.eyeos.daemon.common.report.SeccionReporte;
+import com.eyeos.daemon.common.ui.Logo;
 import com.eyeos.daemon.common.ui.Tema;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -82,6 +83,7 @@ public class AgentApp extends Application {
                 Platform.runLater(() -> log(mensaje)));
 
         stage.setTitle("EyeOS Daemon - Agente de Auditoria");
+        stage.getIcons().setAll(Logo.paraVentana());
         Scene escena = new Scene(construirVista(), 700, 800);
         Tema.aplicar(escena);
         stage.setScene(escena);

@@ -1,15 +1,13 @@
 package com.eyeos.daemon.cliente.ui;
 
+import com.eyeos.daemon.common.ui.Logo;
+
 import java.awt.AWTException;
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.MenuItem;
 import java.awt.PopupMenu;
 import java.awt.SystemTray;
 import java.awt.TrayIcon;
-import java.awt.image.BufferedImage;
 
 public class TrayManager {
 
@@ -38,7 +36,7 @@ public class TrayManager {
             icono.setImageAutoSize(true);
             icono.addActionListener(e -> abrir.run());
             SystemTray.getSystemTray().add(icono);
-        } catch (AWTException e) {
+        } catch (AWTException | RuntimeException e) {
             System.err.println("[EyeOS] No se pudo crear el icono de bandeja: " + e.getMessage());
         }
     }
@@ -50,15 +48,8 @@ public class TrayManager {
         }
     }
 
+    /** Logo EyeOS cargado del classpath, en la variante segun el DPI de la pantalla. */
     private Image imagen() {
-        BufferedImage img = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = img.createGraphics();
-        g.setColor(new Color(0, 120, 215));
-        g.fillRoundRect(0, 0, 16, 16, 5, 5);
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("SansSerif", Font.BOLD, 11));
-        g.drawString("E", 5, 12);
-        g.dispose();
-        return img;
+        return Logo.paraBandejaAwt();
     }
 }
