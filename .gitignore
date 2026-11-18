@@ -17,5 +17,6 @@
 # IDEs generales
 .idea/
 *.iml
-.vscode/
+.vscode/*
+!.vscode/extensions.json
 .DS_Store

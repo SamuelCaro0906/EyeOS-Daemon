@@ -3,6 +3,7 @@ package com.eyeos.daemon.servidor;
 import com.eyeos.daemon.cliente.config.AgentConfig;
 import com.eyeos.daemon.cliente.config.ConfigStore;
 import com.eyeos.daemon.common.model.EquipoReportado;
+import com.eyeos.daemon.common.ui.Tema;
 import com.eyeos.daemon.servidor.dao.ReporteDAO;
 import com.eyeos.daemon.servidor.dao.ReporteDAOArrayImpl;
 import com.eyeos.daemon.servidor.dao.ReporteDAOJdbcImpl;
@@ -21,11 +22,13 @@ import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
@@ -37,6 +40,7 @@ import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
@@ -65,9 +69,23 @@ public class DashboardApp extends Application {
     private final PanelEstadisticas panelEstadisticas = new PanelEstadisticas();
     private final Set<String> clavesGuardadas = new HashSet<>();
 
+    /* Cabecera y KPIs */
+    private final Label pildoraEstado = new Label("Sin conexion");
+    private final Label contadorCabecera = new Label("0 equipos · 0 reportes");
+    private final Label kpiEquipos = new Label("0");
+    private final Label kpiReportes = new Label("0");
+    private final Label kpiSincronizacion = new Label("Nunca");
+    private final Label kpiBaseDatos = new Label("-");
+    private final Button botonTema = new Button("Modo oscuro");
+
+    /* Estado de carga */
+    private final ProgressIndicator progreso = new ProgressIndicator();
+    private Button botonSincronizar;
+
     private ReporteService servicio;
     private boolean usarCache;
     private boolean sincronizando;
+    private String ultimoEstadoBd = "";
 
     public static void main(String[] args) {
         launch(args);
@@ -82,19 +100,27 @@ public class DashboardApp extends Application {
             db.asegurarColumnas();
             dao = new ReporteDAOJdbcImpl(db);
             estadoBd = "PostgreSQL conectado";
+            ultimoEstadoBd = estadoBd;
         } else {
             dao = new ReporteDAOArrayImpl();
             usarCache = true;
             estadoBd = "PostgreSQL no disponible (modo memoria)";
+            ultimoEstadoBd = estadoBd;
         }
         servicio = new ReporteServiceImpl(dao);
 
         stage.setTitle("EyeOS Daemon - Consola de Gestion");
         cargarConfiguracionAgente();
-        stage.setScene(new Scene(construirVista(), 1180, 760));
 
-        datos.addListener((ListChangeListener<EquipoReportado>) cambio ->
-                panelEstadisticas.actualizar(datos));
+        Scene escena = new Scene(construirVista(), 1180, 800);
+        Tema.aplicar(escena);
+        stage.setScene(escena);
+        aplicarEstadoBaseDatos(db.disponible());
+
+        datos.addListener((ListChangeListener<EquipoReportado>) cambio -> {
+            panelEstadisticas.actualizar(datos);
+            actualizarKpis();
+        });
 
         if (!(dao instanceof ReporteDAOArrayImpl)) {
             try {
@@ -103,7 +129,7 @@ public class DashboardApp extends Application {
                     clavesGuardadas.add(EstadisticasReportes.clave(reporte));
                 }
             } catch (Exception e) {
-                estado.setText("No se pudieron cargar reportes: " + e.getMessage());
+                setEstado("No se pudieron cargar reportes: " + e.getMessage(), "estado-error");
             }
         } else {
             datos.setAll(cache.cargar());
@@ -113,7 +139,8 @@ public class DashboardApp extends Application {
             estadoBd += " | cache local: " + datos.size() + " reportes";
         }
         panelEstadisticas.actualizar(datos);
-        estado.setText(estadoBd + " | registros: " + datos.size());
+        actualizarKpis();
+        setEstado(estadoBd + " | registros: " + datos.size(), usarCache ? "estado-info" : "estado-ok");
         stage.show();
     }
 
@@ -138,7 +165,85 @@ public class DashboardApp extends Application {
         }
     }
 
+    /* ============================================================
+       Vistas
+       ============================================================ */
+
     private BorderPane construirVista() {
+        crearColumnas();
+
+        VBox superior = new VBox(12, construirCabecera(), construirFilaKpis());
+        superior.setPadding(new Insets(0));
+
+        VBox reportes = new VBox(10, construirTarjetaFtp(), construirFiltros(),
+                construirBarraBusqueda(), tabla);
+        reportes.setPadding(new Insets(14, 22, 14, 22));
+        VBox.setVgrow(tabla, Priority.ALWAYS);
+
+        Tab tabReportes = new Tab("Reportes", reportes);
+        Tab tabEstadisticas = new Tab("Estadisticas", panelEstadisticas);
+        tabReportes.setClosable(false);
+        tabEstadisticas.setClosable(false);
+        TabPane tabs = new TabPane(tabReportes, tabEstadisticas);
+        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
+
+        BorderPane root = new BorderPane();
+        root.setTop(superior);
+        root.setCenter(tabs);
+        root.setBottom(construirBarraEstado());
+        return root;
+    }
+
+    private HBox construirCabecera() {
+        Label marca = new Label("EyeOS Daemon");
+        marca.getStyleClass().add("marca");
+        Label subtitulo = new Label("Consola de gestion de equipos");
+        subtitulo.getStyleClass().add("marca-sub");
+        VBox titulos = new VBox(1, marca, subtitulo);
+
+        pildoraEstado.getStyleClass().addAll("pildora", "pildora-error");
+        contadorCabecera.getStyleClass().add("contador-cabecera");
+
+        botonTema.getStyleClass().add("boton-tema");
+        botonTema.setOnAction(e -> {
+            boolean oscuro = Tema.alternar(escena());
+            botonTema.setText(oscuro ? "Modo claro" : "Modo oscuro");
+        });
+
+        Region hueco = new Region();
+        HBox.setHgrow(hueco, Priority.ALWAYS);
+
+        HBox barra = new HBox(14, titulos, hueco, pildoraEstado, contadorCabecera, botonTema);
+        barra.setAlignment(Pos.CENTER_LEFT);
+        barra.getStyleClass().add("cabecera");
+        return barra;
+    }
+
+    private Scene escena() {
+        return botonTema.getScene();
+    }
+
+    private HBox construirFilaKpis() {
+        HBox fila = new HBox(12,
+                tarjetaKpi("Equipos monitorados", kpiEquipos),
+                tarjetaKpi("Reportes totales", kpiReportes),
+                tarjetaKpi("Ultima sincronizacion", kpiSincronizacion),
+                tarjetaKpi("Base de datos", kpiBaseDatos));
+        fila.getStyleClass().add("fila-kpis");
+        return fila;
+    }
+
+    private VBox tarjetaKpi(String etiqueta, Label valor) {
+        Label rotulo = new Label(etiqueta);
+        rotulo.getStyleClass().add("kpi-etiqueta");
+        valor.getStyleClass().add("kpi-valor");
+        VBox caja = new VBox(3, rotulo, valor);
+        caja.getStyleClass().add("tarjeta-kpi");
+        HBox.setHgrow(caja, Priority.ALWAYS);
+        return caja;
+    }
+
+    private VBox construirTarjetaFtp() {
         GridPane conexion = new GridPane();
         conexion.setHgap(8);
         conexion.setVgap(8);
@@ -153,16 +258,24 @@ public class DashboardApp extends Application {
         conexion.add(new Label("Carpeta remota:"), 0, 2);
         conexion.add(remoteDir, 1, 2);
 
-        Button sincronizar = new Button("Sincronizar desde FTP");
-        sincronizar.setOnAction(e -> sincronizar());
-        conexion.add(sincronizar, 2, 2, 2, 1);
+        botonSincronizar = new Button("Sincronizar desde FTP");
+        botonSincronizar.getStyleClass().add("boton-primario");
+        botonSincronizar.setOnAction(e -> sincronizar());
+        conexion.add(botonSincronizar, 2, 2, 2, 1);
         GridPane.setHgrow(ftpHost, Priority.ALWAYS);
         GridPane.setHgrow(ftpUser, Priority.ALWAYS);
         GridPane.setHgrow(ftpPassword, Priority.ALWAYS);
         GridPane.setHgrow(remoteDir, Priority.ALWAYS);
 
-        crearColumnas();
+        Label titulo = new Label("Conexion y sincronizacion FTP");
+        titulo.getStyleClass().add("titulo-seccion");
 
+        VBox tarjeta = new VBox(10, titulo, conexion);
+        tarjeta.getStyleClass().add("tarjeta");
+        return tarjeta;
+    }
+
+    private FlowPane construirFiltros() {
         FlowPane filtros = new FlowPane(14, 8);
         for (TableColumn<EquipoReportado, ?> columna : tabla.getColumns()) {
             CheckBox check = new CheckBox(columna.getText());
@@ -170,37 +283,41 @@ public class DashboardApp extends Application {
             columna.visibleProperty().bind(check.selectedProperty());
             filtros.getChildren().add(check);
         }
+        filtros.getStyleClass().add("filtros");
+        return filtros;
+    }
 
-        HBox barraBusqueda = new HBox(8, new Label("Filtrar equipo/usuario:"), busqueda);
-        HBox.setHgrow(busqueda, Priority.ALWAYS);
+    private HBox construirBarraBusqueda() {
+        busqueda.setPromptText("Buscar equipo, usuario o sistema operativo...");
+        busqueda.getStyleClass().add("campo-busqueda");
         busqueda.textProperty().addListener((obs, anterior, valor) ->
                 filtrados.setPredicate(reporte -> coincide(reporte, valor)));
 
-        tabla.setItems(filtrados);
-        tabla.setPlaceholder(new Label("No hay reportes. Usa 'Sincronizar desde FTP'."));
-
-        estado.setPadding(new Insets(8));
-
-        VBox superior = new VBox(10, conexion);
-        superior.setPadding(new Insets(12, 12, 0, 12));
-
-        VBox reportes = new VBox(10, filtros, barraBusqueda, tabla);
-        reportes.setPadding(new Insets(12));
-        VBox.setVgrow(tabla, Priority.ALWAYS);
-
-        Tab tabReportes = new Tab("Reportes", reportes);
-        Tab tabEstadisticas = new Tab("Estadisticas", panelEstadisticas);
-        tabReportes.setClosable(false);
-        tabEstadisticas.setClosable(false);
-        TabPane tabs = new TabPane(tabReportes, tabEstadisticas);
-        tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
-
-        BorderPane root = new BorderPane();
-        root.setTop(superior);
-        root.setCenter(tabs);
-        root.setBottom(estado);
-        return root;
+        Label rotulo = new Label("Filtrar:");
+        Region hueco = new Region();
+        HBox.setHgrow(busqueda, Priority.ALWAYS);
+        HBox.setHgrow(hueco, Priority.NEVER);
+        HBox barra = new HBox(8, rotulo, busqueda, hueco);
+        barra.setAlignment(Pos.CENTER_LEFT);
+        return barra;
     }
+
+    private HBox construirBarraEstado() {
+        progreso.setPrefSize(18, 18);
+        progreso.setProgress(ProgressIndicator.INDETERMINATE_PROGRESS);
+        progreso.setVisible(false);
+        progreso.setManaged(false);
+
+        estado.getStyleClass().add("estado-info");
+        HBox barra = new HBox(10, progreso, estado);
+        barra.setAlignment(Pos.CENTER_LEFT);
+        barra.getStyleClass().add("barra-estado");
+        return barra;
+    }
+
+    /* ============================================================
+       Columnas y logica de tabla
+       ============================================================ */
 
     private void crearColumnas() {
         tabla.getColumns().setAll(List.of(
@@ -214,6 +331,8 @@ public class DashboardApp extends Application {
                 columna("BIOS Serial", EquipoReportado::getBiosSerial, 150),
                 columna("UUID Placa", EquipoReportado::getBaseboardUuid, 200)
         ));
+        tabla.setPlaceholder(new Label("No hay reportes. Usa 'Sincronizar desde FTP' para cargar datos."));
+        tabla.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
     }
 
     private TableColumn<EquipoReportado, String> columna(
@@ -241,9 +360,48 @@ public class DashboardApp extends Application {
         return valor != null ? valor : "";
     }
 
+    /* ============================================================
+       KPIs y estado
+       ============================================================ */
+
+    private void actualizarKpis() {
+        long equipos = EstadisticasReportes.hostnames(datos).size();
+        kpiEquipos.setText(String.valueOf(equipos));
+        kpiReportes.setText(String.valueOf(datos.size()));
+        contadorCabecera.setText(equipos + " equipos · " + datos.size() + " reportes");
+    }
+
+    private void aplicarEstadoBaseDatos(boolean disponible) {
+        pildoraEstado.setText(disponible ? "PostgreSQL conectado" : "Modo memoria");
+        pildoraEstado.getStyleClass().removeAll("pildora-ok", "pildora-error", "pildora-warn");
+        pildoraEstado.getStyleClass().add(disponible ? "pildora-ok" : "pildora-warn");
+
+        kpiBaseDatos.setText(disponible ? "Conectado" : "En memoria");
+        kpiBaseDatos.getStyleClass().removeAll("kpi-valor-ok", "kpi-valor-error");
+        kpiBaseDatos.getStyleClass().add(disponible ? "kpi-valor-ok" : "kpi-valor-error");
+    }
+
+    private void setEstado(String texto, String clase) {
+        estado.setText(texto);
+        estado.getStyleClass().removeAll("estado-info", "estado-ok", "estado-error", "estado-cargando");
+        estado.getStyleClass().add(clase);
+    }
+
+    private void mostrarCargando(boolean cargando) {
+        progreso.setVisible(cargando);
+        progreso.setManaged(cargando);
+        if (botonSincronizar != null) {
+            botonSincronizar.setDisable(cargando);
+        }
+    }
+
+    /* ============================================================
+       Sincronizacion FTP
+       ============================================================ */
+
     private void sincronizar() {
         if (sincronizando) {
-            estado.setText("Ya hay una sincronizacion en curso.");
+            setEstado("Ya hay una sincronizacion en curso.", "estado-info");
             return;
         }
         String host = ftpHost.getText().trim();
@@ -253,11 +411,12 @@ public class DashboardApp extends Application {
         int puerto = ftpPort.getValue();
 
         if (host.isBlank() || usuario.isBlank()) {
-            estado.setText("Indica el servidor y el usuario FTP.");
+            setEstado("Indica el servidor y el usuario FTP.", "estado-error");
             return;
         }
         sincronizando = true;
-        estado.setText("Sincronizando desde " + host + "...");
+        mostrarCargando(true);
+        setEstado("Sincronizando desde " + host + "...", "estado-cargando");
 
         List<EquipoReportado> existentes = List.copyOf(datos);
         Thread hilo = new Thread(() -> {
@@ -285,18 +444,25 @@ public class DashboardApp extends Application {
                 int totalGuardados = guardados;
                 Platform.runLater(() -> {
                     datos.setAll(unicos);
-                    estado.setText("Sincronizados: " + unicos.size() + " (" + reportes.size()
-                            + " leidos) | nuevos guardados: " + totalGuardados);
+                    kpiSincronizacion.setText(horaActual());
+                    setEstado("Sincronizados: " + unicos.size() + " (" + reportes.size()
+                            + " leidos) | nuevos guardados: " + totalGuardados, "estado-ok");
                     sincronizando = false;
+                    mostrarCargando(false);
                 });
             } catch (Exception e) {
                 Platform.runLater(() -> {
-                    estado.setText("Error de sincronizacion: " + e.getMessage());
+                    setEstado("Error de sincronizacion: " + e.getMessage(), "estado-error");
                     sincronizando = false;
+                    mostrarCargando(false);
                 });
             }
         }, "eyeos-sync");
         hilo.setDaemon(true);
         hilo.start();
+    }
+
+    private String horaActual() {
+        return java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
     }
 }
