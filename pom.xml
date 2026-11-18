@@ -182,6 +182,8 @@
                                         <argument>${project.build.finalName}.jar</argument>
                                         <argument>--main-class</argument>
                                         <argument>com.eyeos.daemon.cliente.AgentLauncher</argument>
+                                        <argument>--icon</argument>
+                                        <argument>${project.basedir}/assets/app.ico</argument>
                                         <argument>--add-modules</argument>
                                         <argument>java.se,jdk.unsupported,jdk.management,jdk.crypto.ec,jdk.jfr</argument>
                                         <argument>--java-options</argument>
@@ -217,6 +219,8 @@
                                         <argument>${project.build.finalName}.jar</argument>
                                         <argument>--main-class</argument>
                                         <argument>com.eyeos.daemon.servidor.DashboardLauncher</argument>
+                                        <argument>--icon</argument>
+                                        <argument>${project.basedir}/assets/app.ico</argument>
                                         <argument>--add-modules</argument>
                                         <argument>java.se,jdk.unsupported,jdk.management,jdk.crypto.ec,jdk.jfr</argument>
                                         <argument>--java-options</argument>
